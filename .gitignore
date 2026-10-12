@@ -1,3 +1,11 @@
 
 # Outputs
 main
+
+
+# tools
+.idea
+
+# XDG
+xdg-shell-client-protocol.h
+xdg-shell-protocol.c
