@@ -31,6 +31,28 @@ cc -o client client.c xdg-shell-protocol.c -lwayland-client -lrt
 > [!NOTE]
 > Se decidió usar los comandos del video
 
+
+Revisar 
+
+[fstat](https://linux.die.net/man/2/fstat)
+
+[ejemplo hello wayland](https://gitlab.com/hdante/hello_wayland)
+
+[the hello world wayland blog](https://hdante.wordpress.com/2014/07/08/the-hello-wayland-tutorial/)
+
+Buscando como leer los colores de las imágenes para pasarlas al shm, se encontró en
+StackOverflow una discusión iniciada en 2021 que resultó útil, [How to read images using C](https://stackoverflow.com/questions/69581117/how-to-read-images-using-c).
+
+> [!NOTE]
+> Se decidió usar en las versiones iniciales del proyecto el formato de imágenes .ppm
+
+Esto ayudo a leer los valores del .ppm [Calculate average RGB value of a PPM file](https://stackoverflow.com/questions/55347596/calculate-average-rgb-value-of-a-ppm-file)
+
+Con esto se llegó al punto de tener una ventana con una imagen. La imagen mantiene sus dimensiones en 
+píxeles(3520x1984), mientras que la ventana puede cambiar de tamaño
+([Imagen de ejemplo](images/showcase_primera_imagen.png)). 
+
+
 # Referencias consultadas
 
 [^book]: [Wayland book](https://wayland.freedesktop.org/docs/book/)

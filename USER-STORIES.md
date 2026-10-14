@@ -12,7 +12,7 @@
 **Para** verificar que la previsualización se está desplegando correctamente.
 
 #### Criterios de Aceptación:
-- [ ] Criterio principal:
+- [X] Criterio principal:
     - **Dado que** ejecuto el programa desde mi entorno,
     - **Cuando** la aplicación se inicia correctamente,
     - **Entonces** debe desplegarse una ventana en pantalla mostrando la imagen cargada por defecto sin errores visuales ni cierres inesperados.

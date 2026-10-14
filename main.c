@@ -14,6 +14,8 @@
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
 
+#include <stdio.h>
+
 /* Shared memory support code */
 static void
 randname(char *buf)
@@ -89,7 +91,18 @@ static const struct wl_buffer_listener wl_buffer_listener = {
 static struct wl_buffer *
 draw_frame(struct client_state *state)
 {
-    const int width = 640, height = 480;
+    FILE *fptr;
+    fptr = fopen("images/1344542.ppm", "r");
+    char magic_number[1];
+    int w, h, m;
+    if (fscanf(fptr, "%15s %d %d %d", magic_number, &w, &h, &m) != 4) {
+        printf("Error: Encabezado PPM inválido\n");
+        fclose(fptr);
+        return NULL;
+    }
+    fgetc(fptr);
+    printf("magic_n = %s, width = %d, height = %d, max_colour = %d\n", magic_number, w, h, m);
+    const int width = w, height = h;
     int stride = width * 4;
     int size = stride * height;
 
@@ -106,21 +119,36 @@ draw_frame(struct client_state *state)
     }
 
     struct wl_shm_pool *pool = wl_shm_create_pool(state->wl_shm, fd, size);
-    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0,
-            width, height, stride, WL_SHM_FORMAT_XRGB8888);
+    //struct wl_shm_pool *pool = wl_shm_create_pool(image, fd, size);
+    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool,
+        0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
     wl_shm_pool_destroy(pool);
     close(fd);
 
-    /* Draw checkerboxed background */
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            if ((x + y / 8 * 8) % 16 < 8)
-                data[y * width + x] = 0xFF666666;
-            else
-                data[y * width + x] = 0xFFEEEEEE;
+    typedef struct {
+        unsigned char r, g, b;
+    } pixel;
+    pixel currentPix;
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            if (fread(&currentPix, 3, 1, fptr) != 1) {
+                printf("Error: Se llegó al final del archivo, pixel (%d, %d)\n", x, y);
+                break;
+            }
+            unsigned char r = currentPix.r;
+            unsigned char g = currentPix.g;
+            unsigned char b = currentPix.b;
+
+            uint32_t rgb_color = 0xFF000000 |
+                                ((uint32_t)r << 16) |
+                                ((uint32_t)g << 8)  |
+                                (uint32_t)b;
+            data[y * width + x] = rgb_color;
         }
     }
 
+    fclose(fptr);
     munmap(data, size);
     wl_buffer_add_listener(buffer, &wl_buffer_listener, NULL);
     return buffer;
@@ -206,3 +234,41 @@ main(int argc, char *argv[])
 
     return 0;
 }
+
+    //fprintf(out, "P6 256 256 255\n");
+    //printf(out);
+    // fgets(type, sizeof(type), fptr);
+    // printf("%s", type);
+
+    // char dim[11];
+    // fgets(dim, sizeof(dim), fptr);
+    // printf("%s", dim);
+    // char maxVal[3];
+    // fgets(maxVal, sizeof(maxVal), fptr);
+    // printf("%s", maxVal);
+    // printf("\n");
+    // FILE *fptr;
+    // fptr = fopen("images/1344542.ppm", "r");
+    // char type[10];
+    // char magic_number[1];
+    // int w, h, m;
+    // int red = 0;
+    // int green = 0;
+    // int blue = 0;
+    // fscanf(fptr, "%s %d %d %d", &magic_number, &w, &h, &m);
+    // printf("magic_n = %s, width = %d, height = %d, max_colour = %d\n", magic_number, w, h, m);
+    // typedef struct {
+    //     unsigned char r, g, b;
+    // } pixel;
+    // pixel currentPix;
+    // int i = 0;
+    // while (fread(&currentPix, 3, 1, fptr) && i < 10)
+    // {
+    //
+    //     printf("%d %d %d\n", currentPix.r, currentPix.g, currentPix.b);
+    //     i++;
+    //
+    // }
+    // printf("\n");
+    // fclose(fptr);
+    // return 0;
