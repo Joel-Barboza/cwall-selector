@@ -52,6 +52,8 @@ Con esto se llegó al punto de tener una ventana con una imagen. La imagen manti
 píxeles(3520x1984), mientras que la ventana puede cambiar de tamaño
 ([Imagen de ejemplo](images/showcase_primera_imagen.png)). 
 
+Luego se puedo hacer que la imagen se viera pequeña [Ventana Pequeña](images/ventana_pequena.png)
+
 
 # Referencias consultadas
 

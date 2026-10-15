@@ -93,9 +93,9 @@ draw_frame(struct client_state *state)
 {
     FILE *fptr;
     fptr = fopen("images/1344542.ppm", "r");
-    char magic_number[1];
+    char magic_number[4];
     int w, h, m;
-    if (fscanf(fptr, "%15s %d %d %d", magic_number, &w, &h, &m) != 4) {
+    if (fscanf(fptr, "%3s %d %d %d", magic_number, &w, &h, &m) != 4) {
         printf("Error: Encabezado PPM inválido\n");
         fclose(fptr);
         return NULL;
@@ -130,6 +130,7 @@ draw_frame(struct client_state *state)
     } pixel;
     pixel currentPix;
 
+    int n = 8;
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             if (fread(&currentPix, 3, 1, fptr) != 1) {
@@ -144,7 +145,11 @@ draw_frame(struct client_state *state)
                                 ((uint32_t)r << 16) |
                                 ((uint32_t)g << 8)  |
                                 (uint32_t)b;
-            data[y * width + x] = rgb_color;
+            if (y % n == 0)
+            {
+                data[y * width/n + x/n] = rgb_color;
+
+            }
         }
     }
 
@@ -226,6 +231,11 @@ main(int argc, char *argv[])
     xdg_surface_add_listener(state.xdg_surface, &xdg_surface_listener, &state);
     state.xdg_toplevel = xdg_surface_get_toplevel(state.xdg_surface);
     xdg_toplevel_set_title(state.xdg_toplevel, "Example client");
+    xdg_toplevel_set_max_size(state.xdg_toplevel, 440, 250);
+    xdg_toplevel_set_min_size(state.xdg_toplevel, 440, 250);
+    //xdg_surface_set_window_geometry(state.xdg_surface, 600, 500, 400, 250);
+    //xdg_toplevel_resize(state.xdg_toplevel);
+    //xdg_toplevel_set_fullscreen(state.xdg_toplevel);
     wl_surface_commit(state.wl_surface);
 
     while (wl_display_dispatch(state.wl_display)) {
