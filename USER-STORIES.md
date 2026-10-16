@@ -25,11 +25,11 @@
 **Para** acceder a la herramienta rápidamente en cualquier momento sin usar la terminal.
 
 #### Criterios de Aceptación:
-- [ ] Activación por atajo:
+- [X] Activación por atajo:
     - **Dado que** estoy usando el sistema y presiono la combinación de teclas configurada,
     - **Cuando** se detecta el atajo de teclado,
     - **Entonces** el selector se debe superponer sobre mis ventanas actuales de forma fluida.
-- [ ] Enfoque de la ventana:
+- [X] Enfoque de la ventana:
     - **Dado que** el selector se ha desplegado en pantalla,
     - **Cuando** la interfaz está lista,
     - **Entonces** el cursor/foco debe quedar listo para interactuar con la aplicación.

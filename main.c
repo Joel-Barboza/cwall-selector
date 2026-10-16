@@ -160,6 +160,26 @@ draw_frame(struct client_state *state)
 }
 
 static void
+xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel,
+        int32_t width, int32_t height, struct wl_array *states)
+{
+    /* This space deliberately left blank */
+}
+
+static void
+xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
+{
+    // Al recibir el evento de cerrar, rompemos el bucle cambiando una condición
+    bool *running = data;
+    *running = false;
+}
+
+static const struct xdg_toplevel_listener xdg_toplevel_listener = {
+    .configure = xdg_toplevel_configure,
+    .close = xdg_toplevel_close,
+};
+
+static void
 xdg_surface_configure(void *data,
         struct xdg_surface *xdg_surface, uint32_t serial)
 {
@@ -220,6 +240,8 @@ int
 main(int argc, char *argv[])
 {
     struct client_state state = { 0 };
+    bool running = true;
+
     state.wl_display = wl_display_connect(NULL);
     state.wl_registry = wl_display_get_registry(state.wl_display);
     wl_registry_add_listener(state.wl_registry, &wl_registry_listener, &state);
@@ -230,6 +252,7 @@ main(int argc, char *argv[])
             state.xdg_wm_base, state.wl_surface);
     xdg_surface_add_listener(state.xdg_surface, &xdg_surface_listener, &state);
     state.xdg_toplevel = xdg_surface_get_toplevel(state.xdg_surface);
+    xdg_toplevel_add_listener(state.xdg_toplevel, &xdg_toplevel_listener, &running);
     xdg_toplevel_set_title(state.xdg_toplevel, "Example client");
     xdg_toplevel_set_max_size(state.xdg_toplevel, 440, 250);
     xdg_toplevel_set_min_size(state.xdg_toplevel, 440, 250);
@@ -238,13 +261,17 @@ main(int argc, char *argv[])
     //xdg_toplevel_set_fullscreen(state.xdg_toplevel);
     wl_surface_commit(state.wl_surface);
 
-    while (wl_display_dispatch(state.wl_display)) {
+    while (running && wl_display_dispatch(state.wl_display) != -1) {
         /* This space deliberately left blank */
     }
 
+    xdg_toplevel_destroy(state.xdg_toplevel);
+    xdg_surface_destroy(state.xdg_surface);
+    wl_surface_destroy(state.wl_surface);
+    wl_display_disconnect(state.wl_display);
+
     return 0;
 }
-
     //fprintf(out, "P6 256 256 255\n");
     //printf(out);
     // fgets(type, sizeof(type), fptr);

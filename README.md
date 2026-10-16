@@ -56,6 +56,12 @@ píxeles(3520x1984), mientras que la ventana puede cambiar de tamaño
 Luego se puedo hacer que la imagen se viera pequeña 
 ![Ventana Pequeña](images/ventana_pequeña.png)
 
+Se logró hacer que la ventana se corra con SUPER + W usando el siguiente código en Hyprland:
+```bash
+hl.bind(mainMod .. " + " .. "W", hl.dsp.exec_cmd("cd ~/Code/cwall-selector && ./main"))
+```
+Probablemente, luego deba investigar como hacer eso más automático y generalista, para no tener que poner
+la ruta en la cual se encuentra el proyecto.
 
 # Referencias consultadas
 
