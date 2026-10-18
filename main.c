@@ -13,8 +13,10 @@
 #include <unistd.h>
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
+#include "wlr-layer-shell-unstable-v1-client-protocol.h"
 
 #include <stdio.h>
+#include <stdint.h>
 
 /* Shared memory support code */
 static void
@@ -73,8 +75,11 @@ struct client_state {
     struct xdg_wm_base *xdg_wm_base;
     /* Objects */
     struct wl_surface *wl_surface;
-    struct xdg_surface *xdg_surface;
-    struct xdg_toplevel *xdg_toplevel;
+    struct zwlr_layer_shell_v1 *layer_shell;
+    struct zwlr_layer_surface_v1 *layer_surface;
+    /* State */
+    bool running;
+    /* Image props */
 };
 
 static void
@@ -103,6 +108,10 @@ draw_frame(struct client_state *state)
     fgetc(fptr);
     printf("magic_n = %s, width = %d, height = %d, max_colour = %d\n", magic_number, w, h, m);
     const int width = w, height = h;
+
+    // para escalar imagen
+    const int image_scale = 8;
+
     int stride = width * 4;
     int size = stride * height;
 
@@ -119,7 +128,6 @@ draw_frame(struct client_state *state)
     }
 
     struct wl_shm_pool *pool = wl_shm_create_pool(state->wl_shm, fd, size);
-    //struct wl_shm_pool *pool = wl_shm_create_pool(image, fd, size);
     struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool,
         0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
     wl_shm_pool_destroy(pool);
@@ -130,7 +138,6 @@ draw_frame(struct client_state *state)
     } pixel;
     pixel currentPix;
 
-    int n = 8;
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             if (fread(&currentPix, 3, 1, fptr) != 1) {
@@ -145,9 +152,9 @@ draw_frame(struct client_state *state)
                                 ((uint32_t)r << 16) |
                                 ((uint32_t)g << 8)  |
                                 (uint32_t)b;
-            if (y % n == 0)
+            if (y % image_scale == 0)
             {
-                data[y * width/n + x/n] = rgb_color;
+                data[y * width / image_scale + x / image_scale] = rgb_color;
 
             }
         }
@@ -159,50 +166,30 @@ draw_frame(struct client_state *state)
     return buffer;
 }
 
-static void
-xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel,
-        int32_t width, int32_t height, struct wl_array *states)
-{
-    /* This space deliberately left blank */
-}
-
-static void
-xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
-{
-    // Al recibir el evento de cerrar, rompemos el bucle cambiando una condición
-    bool *running = data;
-    *running = false;
-}
-
-static const struct xdg_toplevel_listener xdg_toplevel_listener = {
-    .configure = xdg_toplevel_configure,
-    .close = xdg_toplevel_close,
-};
-
-static void
-xdg_surface_configure(void *data,
-        struct xdg_surface *xdg_surface, uint32_t serial)
-{
+static void layer_surface_configure(void *data,
+        struct zwlr_layer_surface_v1 *surface,
+        uint32_t serial, uint32_t w, uint32_t h) {
     struct client_state *state = data;
-    xdg_surface_ack_configure(xdg_surface, serial);
-
+    zwlr_layer_surface_v1_ack_configure(surface, serial);
     struct wl_buffer *buffer = draw_frame(state);
+    if (!buffer) {
+        fprintf(stderr, "Error: No se pudo dibujar el frame en layer_surface\n");
+        return;
+    }
     wl_surface_attach(state->wl_surface, buffer, 0, 0);
     wl_surface_commit(state->wl_surface);
 }
 
-static const struct xdg_surface_listener xdg_surface_listener = {
-    .configure = xdg_surface_configure,
-};
 
-static void
-xdg_wm_base_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial)
-{
-    xdg_wm_base_pong(xdg_wm_base, serial);
+static void layer_surface_closed(void *data,
+        struct zwlr_layer_surface_v1 *surface) {
+    struct client_state *state = data;
+    state->running = false;
 }
 
-static const struct xdg_wm_base_listener xdg_wm_base_listener = {
-    .ping = xdg_wm_base_ping,
+struct zwlr_layer_surface_v1_listener layer_surface_listener = {
+    .configure = layer_surface_configure,
+    .closed = layer_surface_closed,
 };
 
 static void
@@ -216,11 +203,10 @@ registry_global(void *data, struct wl_registry *wl_registry,
     } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
         state->wl_compositor = wl_registry_bind(
                 wl_registry, name, &wl_compositor_interface, 4);
-    } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-        state->xdg_wm_base = wl_registry_bind(
-                wl_registry, name, &xdg_wm_base_interface, 1);
-        xdg_wm_base_add_listener(state->xdg_wm_base,
-                &xdg_wm_base_listener, state);
+    } else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0)
+    {
+        state->layer_shell = wl_registry_bind(
+            wl_registry, name, &zwlr_layer_shell_v1_interface, version < 4 ? version : 4);
     }
 }
 
@@ -240,72 +226,60 @@ int
 main(int argc, char *argv[])
 {
     struct client_state state = { 0 };
-    bool running = true;
+    state.running = true;
+    enum zwlr_layer_shell_v1_layer layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
+    const char *namespace = "wallpaper-selector";
 
     state.wl_display = wl_display_connect(NULL);
+    if (state.wl_display == NULL) {
+        fprintf(stderr, "Failed to create display\n");
+        return 1;
+    }
     state.wl_registry = wl_display_get_registry(state.wl_display);
     wl_registry_add_listener(state.wl_registry, &wl_registry_listener, &state);
     wl_display_roundtrip(state.wl_display);
 
+    if (state.wl_compositor == NULL) {
+        fprintf(stderr, "wl_compositor not available\n");
+        return 1;
+    }
+    if (state.wl_shm == NULL) {
+        fprintf(stderr, "wl_shm not available\n");
+        return 1;
+    }
+    if (state.layer_shell == NULL) {
+        fprintf(stderr, "layer_shell not available\n");
+        return 1;
+    }
+
     state.wl_surface = wl_compositor_create_surface(state.wl_compositor);
-    state.xdg_surface = xdg_wm_base_get_xdg_surface(
-            state.xdg_wm_base, state.wl_surface);
-    xdg_surface_add_listener(state.xdg_surface, &xdg_surface_listener, &state);
-    state.xdg_toplevel = xdg_surface_get_toplevel(state.xdg_surface);
-    xdg_toplevel_add_listener(state.xdg_toplevel, &xdg_toplevel_listener, &running);
-    xdg_toplevel_set_title(state.xdg_toplevel, "Example client");
-    xdg_toplevel_set_max_size(state.xdg_toplevel, 440, 250);
-    xdg_toplevel_set_min_size(state.xdg_toplevel, 440, 250);
-    //xdg_surface_set_window_geometry(state.xdg_surface, 600, 500, 400, 250);
-    //xdg_toplevel_resize(state.xdg_toplevel);
-    //xdg_toplevel_set_fullscreen(state.xdg_toplevel);
+
+    // Ver main() en swaywm/wlroots/examples/layer-shell.c
+
+    state.layer_surface = zwlr_layer_shell_v1_get_layer_surface(
+        state.layer_shell, state.wl_surface, NULL, layer, namespace);
+
+    uint32_t anchors = ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP |
+                   ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM |
+                   ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
+                   ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
+
+    zwlr_layer_surface_v1_set_anchor(state.layer_surface, anchors);
+
+
+    zwlr_layer_surface_v1_set_size(state.layer_surface, 0, 0);
+    zwlr_layer_surface_v1_add_listener(state.layer_surface,
+            &layer_surface_listener, &state);
     wl_surface_commit(state.wl_surface);
 
-    while (running && wl_display_dispatch(state.wl_display) != -1) {
+    while (state.running && wl_display_dispatch(state.wl_display) != -1) {
+        // printf("running\n");
         /* This space deliberately left blank */
     }
 
-    xdg_toplevel_destroy(state.xdg_toplevel);
-    xdg_surface_destroy(state.xdg_surface);
+    zwlr_layer_surface_v1_destroy(state.layer_surface);
     wl_surface_destroy(state.wl_surface);
     wl_display_disconnect(state.wl_display);
 
     return 0;
 }
-    //fprintf(out, "P6 256 256 255\n");
-    //printf(out);
-    // fgets(type, sizeof(type), fptr);
-    // printf("%s", type);
-
-    // char dim[11];
-    // fgets(dim, sizeof(dim), fptr);
-    // printf("%s", dim);
-    // char maxVal[3];
-    // fgets(maxVal, sizeof(maxVal), fptr);
-    // printf("%s", maxVal);
-    // printf("\n");
-    // FILE *fptr;
-    // fptr = fopen("images/1344542.ppm", "r");
-    // char type[10];
-    // char magic_number[1];
-    // int w, h, m;
-    // int red = 0;
-    // int green = 0;
-    // int blue = 0;
-    // fscanf(fptr, "%s %d %d %d", &magic_number, &w, &h, &m);
-    // printf("magic_n = %s, width = %d, height = %d, max_colour = %d\n", magic_number, w, h, m);
-    // typedef struct {
-    //     unsigned char r, g, b;
-    // } pixel;
-    // pixel currentPix;
-    // int i = 0;
-    // while (fread(&currentPix, 3, 1, fptr) && i < 10)
-    // {
-    //
-    //     printf("%d %d %d\n", currentPix.r, currentPix.g, currentPix.b);
-    //     i++;
-    //
-    // }
-    // printf("\n");
-    // fclose(fptr);
-    // return 0;

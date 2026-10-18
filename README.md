@@ -1,5 +1,5 @@
 
-Se intentó seguir el tutorial Writting Wayland Clients[^tuto], pero usaba wl_shell y no funcionaba
+Se intentó seguir el tutorial Writing Wayland Clients[^tuto], pero usaba wl_shell y no funcionaba
 
 Y viendo la documentación en The Wayland Protocol [^protocol], se notó que [`wl_shell`](https://wayland.freedesktop.org/docs/html/apa.html#protocol-spec-wl_shell) 
 está obsoleto y sustituido por `xdg_shell`
@@ -62,6 +62,32 @@ hl.bind(mainMod .. " + " .. "W", hl.dsp.exec_cmd("cd ~/Code/cwall-selector && ./
 ```
 Probablemente, luego deba investigar como hacer eso más automático y generalista, para no tener que poner
 la ruta en la cual se encuentra el proyecto.
+
+---
+
+Una ventana al mismo nivel de las demás no puede que sea la mejor opción, debe ser algo que se superponga como [swaync](https://github.com/ErikReider/SwayNotificationCenter), o [swaylock](https://github.com/swaywm/swaylock)
+
+[read](https://wayland.freedesktop.org/docs/html/apb.html)
+
+Se encontró [wlr layer shell](https://wayland.app/protocols/wlr-layer-shell-unstable-v1)
+
+Se generaron los archivos con wayland-scanner
+```bash
+wayland-scanner client-header /usr/share/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml wlr-layer-shell-unstable-v1-client-protocol.h
+wayland-scanner private-code /usr/share/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml wlr-layer-shell-unstable-v1-client-protocol.c
+```
+
+Y para implementarlo se encontró [Writing a Wayland compositor with wlroots: shells ](https://drewdevault.com/blog/Wayland-shells/), que contenía referencias a [Swaywm/wlroots](https://github.com/swaywm/wlroots/blob/master/examples/layer-shell.c)
+
+---
+
+## Se hicieron varios cambios:
+- De momento no se está usando nada que tenga que ver con xdg
+- Se agregó wlr-layer-shell, para agregar la ventana a la tapa de overlay, donde fue de mucha ayuda Swaywm/wlroots/
+- Se maximizó la ventana.
+
+Ahora se intentará continuar con el [US-003: Cerrar la ventana](USER-STORIES.md/#us-003-cerrar-la-ventana-al-presionar-enter-o-hacer-clic)
+
 
 # Referencias consultadas
 

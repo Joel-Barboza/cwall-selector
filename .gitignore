@@ -9,3 +9,7 @@ main
 # XDG
 xdg-shell-client-protocol.h
 xdg-shell-protocol.c
+
+# wlr layer shell
+wlr-layer-shell-unstable-v1-client-protocol.c
+wlr-layer-shell-unstable-v1-client-protocol.h
