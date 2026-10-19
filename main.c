@@ -85,6 +85,10 @@ struct client_state {
     /* Window */
     uint32_t width, height;
 
+    /* Buffer */
+    struct wl_buffer *buffer;
+    uint32_t *data;
+
 };
 
 static void
@@ -98,84 +102,103 @@ static const struct wl_buffer_listener wl_buffer_listener = {
     .release = wl_buffer_release,
 };
 
-// static void draw_image(char * uri)
-// {
-//
-// }
-//
-static struct wl_buffer *
-draw_frame(struct client_state *state)
+static void
+create_wl_shm(struct client_state *state)
 {
-    FILE *fptr;
-    fptr = fopen("images/1344542.ppm", "r");
+    int stride = state->width * 4;
+    int size = stride * state->height;
+
+    int fd = allocate_shm_file(size);
+    if (fd == -1) {
+        return;
+    }
+
+    state->data = mmap(NULL, size,
+            PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (state->data == MAP_FAILED) {
+        close(fd);
+        return;
+    }
+
+    struct wl_shm_pool *pool = wl_shm_create_pool(state->wl_shm, fd, size);
+    state->buffer = wl_shm_pool_create_buffer(pool,
+        0, state->width, state->height, stride, WL_SHM_FORMAT_ARGB8888);
+    wl_buffer_add_listener(state->buffer, &wl_buffer_listener, NULL);
+    wl_shm_pool_destroy(pool);
+    close(fd);
+    //return state->buffer;
+}
+
+static void
+draw_image(struct client_state *state)
+{
+    char *uri = "images/1344542.ppm";
+    int scale = 8;
+
+    FILE *fptr = fopen(uri, "r");
+    if (!fptr) {
+        printf("Error: No se pudo abrir el archivo PPM\n");
+        return;
+    }
+
     char magic_number[4];
     int w, h, m;
     if (fscanf(fptr, "%3s %d %d %d", magic_number, &w, &h, &m) != 4) {
         printf("Error: Encabezado PPM inválido\n");
         fclose(fptr);
-        return NULL;
+        return;
     }
-    fgetc(fptr);
-    printf("magic_n = %s, width = %d, height = %d, max_colour = %d\n", magic_number, w, h, m);
+    fgetc(fptr); // consume newline after header
 
-    const int width = state->width;
-    const int height = state->height;
-    // para escalar imagen
-    const int image_scale = 1;
-
-    int stride = width * 4;
-    int size = stride * height;
-
-    int fd = allocate_shm_file(size);
-    if (fd == -1) {
-        return NULL;
-    }
-
-    uint32_t *data = mmap(NULL, size,
-            PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (data == MAP_FAILED) {
-        close(fd);
-        return NULL;
-    }
-
-    struct wl_shm_pool *pool = wl_shm_create_pool(state->wl_shm, fd, size);
-    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool,
-        0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
-    wl_shm_pool_destroy(pool);
-    close(fd);
-
+    int offset_x = state->width / 2 - (w / scale) * 0.5;
+    int offset_y = state->height - w / scale - 10;
     typedef struct {
         unsigned char r, g, b;
     } pixel;
     pixel currentPix;
 
-    for (int y = 0; y < state->height; ++y) {
-        for (int x = 0; x < state->width; ++x) {
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
             if (fread(&currentPix, 3, 1, fptr) != 1) {
-                printf("Error: Se llegó al final del archivo, pixel (%d, %d)\n", x, y);
                 break;
             }
-            unsigned char r = currentPix.r;
-            unsigned char g = currentPix.g;
-            unsigned char b = currentPix.b;
 
-            // uint32_t rgb_color = 0xFF000000 |
-            //                     ((uint32_t)r << 16) |
-            //                     ((uint32_t)g << 8)  |
-            //                     (uint32_t)b;
-            uint32_t rgb_color = 0xAA005600;
-            if (y % image_scale == 0)
-            {
-                data[y * width / image_scale + x / image_scale] = rgb_color;
+            if (y % scale == 0 && x % scale == 0) {
+                // Apply scale and add the starting offsets
+                int target_y = (y / scale) + offset_y;
+                int target_x = (x / scale) + offset_x;
 
+                // Ensure we stay within screen boundaries
+                if (target_y >= 0 && target_y < state->height &&
+                    target_x >= 0 && target_x < state->width) {
+
+                    uint32_t rgb_color = 0xFF000000 |
+                                         ((uint32_t)currentPix.r << 16) |
+                                         ((uint32_t)currentPix.g << 8)  |
+                                         (uint32_t)currentPix.b;
+
+                    state->data[target_y * state->width + target_x] = rgb_color;
+                    }
             }
         }
     }
 
     fclose(fptr);
-    munmap(data, size);
-    wl_buffer_add_listener(buffer, &wl_buffer_listener, NULL);
-    return buffer;
+}
+
+
+static void
+draw_frame(struct client_state *state)
+{
+    int stride = state->width * 4;
+    int size = stride * state->height;
+
+    uint32_t rgb_color = 0xAA000000;
+    for (int y = 0; y < state->height; ++y) {
+        for (int x = 0; x < state->width; ++x) {
+            state->data[y * state->width + x] = rgb_color;
+        }
+    }
 }
 
 static void layer_surface_configure(void *data,
@@ -185,13 +208,16 @@ static void layer_surface_configure(void *data,
     zwlr_layer_surface_v1_ack_configure(surface, serial);
     state->width = w;
     state->height = h;
+
+    create_wl_shm(state);
     printf("Configurando capa a tamaño: %d x %d\n", w, h);
-    struct wl_buffer *buffer = draw_frame(state);
-    if (!buffer) {
+    draw_frame(state);
+    draw_image(state);
+    if (!state->buffer) {
         fprintf(stderr, "Error: No se pudo dibujar el frame en layer_surface\n");
         return;
     }
-    wl_surface_attach(state->wl_surface, buffer, 0, 0);
+    wl_surface_attach(state->wl_surface, state->buffer, 0, 0);
     wl_surface_damage_buffer(state->wl_surface, 0, 0, w, h);
     wl_surface_commit(state->wl_surface);
 }
@@ -368,6 +394,8 @@ main(int argc, char *argv[])
     while (state.running && wl_display_dispatch(state.wl_display) != -1) {
         // printf("running\n");
         /* This space deliberately left blank */
+        int size = state.width * 4 * state.height;
+        munmap(state.data, size);
     }
 
     zwlr_layer_surface_v1_destroy(state.layer_surface);

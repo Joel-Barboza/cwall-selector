@@ -88,12 +88,6 @@ Y para implementarlo se encontró [Writing a Wayland compositor with wlroots: sh
 
 Ahora se intentará continuar con el [US-003: Cerrar la ventana](USER-STORIES.md/#us-003-cerrar-la-ventana-al-presionar-enter-o-hacer-clic)
 
-TODO:
-
-Refactorizar dibujo
-
-Cerrar con clic o enter
-
 --- 
 
 Se va a intentar poner un color de fondo
@@ -121,6 +115,12 @@ Nuevamente, nos vamos a guiar con el ejemplo de Swaywm [^ref_code].
 El [US-003: Cerrar la ventana](USER-STORIES.md/#us-003-cerrar-la-ventana-al-presionar-enter-o-hacer-clic) por el momento se va a marcar como completo
 teniendo únicamente la funcionalidad de cerrar la ventana al presionar enter, no al hacer clic.
 Pero para el MVP se piensa que es suficiente y con esto no es necesario agregar aún el listener a `wl_pointer` al `wl_seat`.
+
+
+---
+
+Se intentará dibujar la imagen en la parte inferior centrada horizontalmente. Esto sin quitar el fondo gris (que antes se muestra en imágenes y menciona como verde).
+
 
 
 # Referencias consultadas
