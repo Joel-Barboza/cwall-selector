@@ -77,9 +77,12 @@ struct client_state {
     struct wl_surface *wl_surface;
     struct zwlr_layer_shell_v1 *layer_shell;
     struct zwlr_layer_surface_v1 *layer_surface;
+    struct wl_output *wl_output;
     /* State */
     bool running;
-    /* Image props */
+    /* Window */
+    uint32_t width, height;
+
 };
 
 static void
@@ -93,6 +96,11 @@ static const struct wl_buffer_listener wl_buffer_listener = {
     .release = wl_buffer_release,
 };
 
+// static void draw_image(char * uri)
+// {
+//
+// }
+//
 static struct wl_buffer *
 draw_frame(struct client_state *state)
 {
@@ -107,10 +115,11 @@ draw_frame(struct client_state *state)
     }
     fgetc(fptr);
     printf("magic_n = %s, width = %d, height = %d, max_colour = %d\n", magic_number, w, h, m);
-    const int width = w, height = h;
 
+    const int width = state->width;
+    const int height = state->height;
     // para escalar imagen
-    const int image_scale = 8;
+    const int image_scale = 1;
 
     int stride = width * 4;
     int size = stride * height;
@@ -138,8 +147,8 @@ draw_frame(struct client_state *state)
     } pixel;
     pixel currentPix;
 
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
+    for (int y = 0; y < state->height; ++y) {
+        for (int x = 0; x < state->width; ++x) {
             if (fread(&currentPix, 3, 1, fptr) != 1) {
                 printf("Error: Se llegó al final del archivo, pixel (%d, %d)\n", x, y);
                 break;
@@ -148,10 +157,11 @@ draw_frame(struct client_state *state)
             unsigned char g = currentPix.g;
             unsigned char b = currentPix.b;
 
-            uint32_t rgb_color = 0xFF000000 |
-                                ((uint32_t)r << 16) |
-                                ((uint32_t)g << 8)  |
-                                (uint32_t)b;
+            // uint32_t rgb_color = 0xFF000000 |
+            //                     ((uint32_t)r << 16) |
+            //                     ((uint32_t)g << 8)  |
+            //                     (uint32_t)b;
+            uint32_t rgb_color = 0xAA005600;
             if (y % image_scale == 0)
             {
                 data[y * width / image_scale + x / image_scale] = rgb_color;
@@ -171,12 +181,16 @@ static void layer_surface_configure(void *data,
         uint32_t serial, uint32_t w, uint32_t h) {
     struct client_state *state = data;
     zwlr_layer_surface_v1_ack_configure(surface, serial);
+    state->width = w;
+    state->height = h;
+    printf("Configurando capa a tamaño: %d x %d\n", w, h);
     struct wl_buffer *buffer = draw_frame(state);
     if (!buffer) {
         fprintf(stderr, "Error: No se pudo dibujar el frame en layer_surface\n");
         return;
     }
     wl_surface_attach(state->wl_surface, buffer, 0, 0);
+    wl_surface_damage_buffer(state->wl_surface, 0, 0, w, h);
     wl_surface_commit(state->wl_surface);
 }
 
@@ -199,14 +213,17 @@ registry_global(void *data, struct wl_registry *wl_registry,
     struct client_state *state = data;
     if (strcmp(interface, wl_shm_interface.name) == 0) {
         state->wl_shm = wl_registry_bind(
-                wl_registry, name, &wl_shm_interface, 1);
+            wl_registry, name, &wl_shm_interface, 1);
     } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
         state->wl_compositor = wl_registry_bind(
-                wl_registry, name, &wl_compositor_interface, 4);
+            wl_registry, name, &wl_compositor_interface, 4);
     } else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0)
     {
         state->layer_shell = wl_registry_bind(
             wl_registry, name, &zwlr_layer_shell_v1_interface, version < 4 ? version : 4);
+    } else if (strcmp(interface, "wl_output") == 0) {
+        state->wl_output = wl_registry_bind(wl_registry, name,
+            &wl_output_interface, 1);
     }
 }
 
@@ -257,7 +274,7 @@ main(int argc, char *argv[])
     // Ver main() en swaywm/wlroots/examples/layer-shell.c
 
     state.layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-        state.layer_shell, state.wl_surface, NULL, layer, namespace);
+        state.layer_shell, state.wl_surface, state.wl_output, layer, namespace);
 
     uint32_t anchors = ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP |
                    ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM |
@@ -266,6 +283,7 @@ main(int argc, char *argv[])
 
     zwlr_layer_surface_v1_set_anchor(state.layer_surface, anchors);
 
+    zwlr_layer_surface_v1_set_exclusive_zone(state.layer_surface, -1);
 
     zwlr_layer_surface_v1_set_size(state.layer_surface, 0, 0);
     zwlr_layer_surface_v1_add_listener(state.layer_surface,

@@ -77,7 +77,7 @@ wayland-scanner client-header /usr/share/wlr-protocols/unstable/wlr-layer-shell-
 wayland-scanner private-code /usr/share/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml wlr-layer-shell-unstable-v1-client-protocol.c
 ```
 
-Y para implementarlo se encontró [Writing a Wayland compositor with wlroots: shells ](https://drewdevault.com/blog/Wayland-shells/), que contenía referencias a [Swaywm/wlroots](https://github.com/swaywm/wlroots/blob/master/examples/layer-shell.c)
+Y para implementarlo se encontró [Writing a Wayland compositor with wlroots: shells ](https://drewdevault.com/blog/Wayland-shells/), que contenía referencias a Swaywm [^ref_code]
 
 ---
 
@@ -87,6 +87,33 @@ Y para implementarlo se encontró [Writing a Wayland compositor with wlroots: sh
 - Se maximizó la ventana.
 
 Ahora se intentará continuar con el [US-003: Cerrar la ventana](USER-STORIES.md/#us-003-cerrar-la-ventana-al-presionar-enter-o-hacer-clic)
+
+TODO:
+
+Refactorizar dibujo
+
+Cerrar con clic o enter
+
+--- 
+
+Se va a intentar poner un color de fondo
+
+Para obtener el tamaño de la pantalla se habla en [Reddit](https://www.reddit.com/r/wayland/comments/1rfdaz9/how_to_query_current_screen_resolution/) de [`wl_output`](https://wayland.app/protocols/wayland#wl_output)
+Y nos apoyamos del código en Swaywm [^ref_code]
+
+Además, se notó que Waybar tenía una parte de la pantalla reservada y se encontró que se debía a [`zwlr_layer_surface_v1::set_exclusive_zone`](https://wayland.app/protocols/wlr-layer-shell-unstable-v1#zwlr_layer_surface_v1:request:set_exclusive_zone), 
+donde dice:
+> If set to -1, the surface indicates that it would not like to be moved to accommodate for other surfaces, and the compositor should extend it all the way to the edges it is anchored to.
+
+Y con esto se logró mostrar el recuadro verde que cubre toda la pantalla.
+
+![imagen_pantalla_completa_verde](images/green_fullscreen.png)
+
+Ahora se intentará mostrar una imagen sobre el fondo verde.
+
+Pero primero, ahora sí, se continuará con el User story de cerrar la ventana.
+
+
 
 
 # Referencias consultadas
@@ -100,6 +127,8 @@ Ahora se intentará continuar con el [US-003: Cerrar la ventana](USER-STORIES.md
 [^tuto]: [Writing Wayland Clients](https://bugaevc.gitbooks.io/writing-wayland-clients/content/)
 
 [^main_video]: [zero to window - wayland client (YouTube)](https://youtu.be/iIVIu7YRdY0?si=T4jjiITBwp_5KDXr)
+
+[^ref_code]: [Swaywm/wlroots](https://github.com/swaywm/wlroots/blob/master/examples/layer-shell.c) 
 
 [Criterios de aceptación: ejemplos para elaborarlos](https://www.scrummanager.com/blog/2023/03/criterios-de-aceptacion-definicion-y-ejemplos/)
 
