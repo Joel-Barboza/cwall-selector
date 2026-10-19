@@ -76,11 +76,11 @@
 **Para** cambiar de colección de imágenes según mi configuración en Hyprland.
 
 #### Criterios de Aceptación:
-- [ ] Parámetro de ruta válido:
+- [X] Parámetro de ruta válido:
     - **Dado que** ejecuto el comando indicando una ruta de directorio válida (ej. `./selector /ruta/a/fondos`),
     - **Cuando** la aplicación inicia,
     - **Entonces** debe cargar e iterar únicamente sobre las imágenes pertenecientes a esa carpeta.
-- [ ] Manejo de errores de ruta:
+- [X] Manejo de errores de ruta:
     - **Dado que** indico una ruta inexistente o vacía,
     - **Cuando** la aplicación intenta iniciar,
     - **Entonces** debe mostrar un mensaje comprensible y cerrarse de forma segura.

@@ -121,6 +121,28 @@ Pero para el MVP se piensa que es suficiente y con esto no es necesario agregar 
 
 Se intentará dibujar la imagen en la parte inferior centrada horizontalmente. Esto sin quitar el fondo gris (que antes se muestra en imágenes y menciona como verde).
 
+--- 
+
+Para el [US-004: cargar imágenes de carpeta](USER-STORIES.md/#us-004-cargar-automáticamente-las-imágenes-de-una-carpeta) se tomó como referencia [How can I get the list of files in a directory using C or C++?](https://codemia.io/knowledge-hub/path/how_can_i_get_the_list_of_files_in_a_directory_using_c_or_c)
+
+Para el [US-005](USER-STORIES.md/#us-005-especificar-la-ruta-de-la-carpeta-desde-hyprland--línea-de-comandos)
+se agregó:
+
+```lua
+local wallpaperDir = "./images"
+```
+
+Y se cambió:
+
+```lua
+hl.bind(mainMod .. " + " .. "W", hl.dsp.exec_cmd("cd ~/Code/cwall-selector && ./main"))
+```
+
+Por:
+
+```lua
+hl.bind(mainMod .. " + " .. "W", hl.dsp.exec_cmd("cd ~/Code/cwall-selector && ./main '" .. wallpaperDir .. "'"))
+```
 
 
 # Referencias consultadas

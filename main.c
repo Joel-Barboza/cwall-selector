@@ -347,10 +347,26 @@ int
 main(int argc, char *argv[])
 {
     struct client_state state = { 0 };
+    if (argc < 2)
+    {
+        printf("Error: No se pasó ningun argumento, se esperaba la ruta de los fondos de pantalla\n");
+        return 1;
+    }
+    if (argc > 2)
+    {
+        printf("Error: se esperaba solo un argumento (ruta de wallpapers), se recibieron %d\n", argc - 1);
+        return 1;
+    }
+    state.dir = opendir(argv[1]);
+    if (state.dir == NULL)
+    {
+        printf("Error: argumento pasado no es una ruta existente\n");
+        return 1;
+    }
     state.running = true;
     state.image_uris = NULL;
     state.image_uris_count = 0;
-    state.dir = opendir("./images");
+    //state.dir = opendir("./images");
     struct dirent *d;
     if (state.dir) {
         while ((d = readdir(state.dir)) != NULL) {
@@ -377,6 +393,11 @@ main(int argc, char *argv[])
             }
         }
         closedir(state.dir);
+    }
+    if (state.image_uris_count == 0)
+    {
+        printf("Error: el directorio no contiene imágenes de formato válido\n");
+        return 1;
     }
     printf("Se encontraron %d imagenes:\n", state.image_uris_count);
     for (int i = 0; i < state.image_uris_count; i++) {
