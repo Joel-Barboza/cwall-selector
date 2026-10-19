@@ -72,6 +72,8 @@ struct client_state {
     struct wl_registry *wl_registry;
     struct wl_shm *wl_shm;
     struct wl_compositor *wl_compositor;
+    struct wl_seat *wl_seat;
+    struct wl_keyboard *wl_keyboard;
     struct xdg_wm_base *xdg_wm_base;
     /* Objects */
     struct wl_surface *wl_surface;
@@ -206,6 +208,74 @@ struct zwlr_layer_surface_v1_listener layer_surface_listener = {
     .closed = layer_surface_closed,
 };
 
+static void wl_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
+        uint32_t format, int32_t fd, uint32_t size) {
+    // Who cares
+}
+
+static void wl_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard,
+        uint32_t serial, struct wl_surface *surface, struct wl_array *keys) {
+    //wlr_log(WLR_DEBUG, "Keyboard enter");
+    printf("keyboard enter\n");
+}
+
+static void wl_keyboard_leave(void *data, struct wl_keyboard *wl_keyboard,
+        uint32_t serial, struct wl_surface *surface) {
+    //wlr_log(WLR_DEBUG, "Keyboard leave");
+    printf("keyboard leave\n");
+}
+
+static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
+        uint32_t serial, uint32_t time, uint32_t key, uint32_t state) {
+    //wlr_log(WLR_DEBUG, "Key event: %d %d", key, state);
+    // printf("Key event: %d %d", key, state);
+    struct client_state *client_state = data;
+    // 28 is enter
+    if (key == 28)
+    {
+        client_state->running = false;
+    }
+}
+
+static void wl_keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard,
+        uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched,
+        uint32_t mods_locked, uint32_t group) {
+    // Who cares
+}
+
+static void wl_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keyboard,
+        int32_t rate, int32_t delay) {
+    // Who cares
+}
+
+static struct wl_keyboard_listener keyboard_listener = {
+    .keymap = wl_keyboard_keymap,
+    .enter = wl_keyboard_enter,
+    .leave = wl_keyboard_leave,
+    .key = wl_keyboard_key,
+    .modifiers = wl_keyboard_modifiers,
+    .repeat_info = wl_keyboard_repeat_info,
+};
+
+static void seat_handle_capabilities(void *data, struct wl_seat *wl_seat,
+        enum wl_seat_capability caps) {
+    struct client_state *state = data;
+    if ((caps & WL_SEAT_CAPABILITY_KEYBOARD)) {
+        state->wl_keyboard = wl_seat_get_keyboard(wl_seat);
+        wl_keyboard_add_listener(state->wl_keyboard, &keyboard_listener, state);
+    }
+}
+
+static void seat_handle_name(void *data, struct wl_seat *wl_seat,
+        const char *name) {
+    // Who cares
+}
+
+static struct wl_seat_listener seat_listener = {
+    .capabilities = seat_handle_capabilities,
+    .name = seat_handle_name,
+};
+
 static void
 registry_global(void *data, struct wl_registry *wl_registry,
         uint32_t name, const char *interface, uint32_t version)
@@ -224,6 +294,10 @@ registry_global(void *data, struct wl_registry *wl_registry,
     } else if (strcmp(interface, "wl_output") == 0) {
         state->wl_output = wl_registry_bind(wl_registry, name,
             &wl_output_interface, 1);
+    } else if (strcmp(interface, wl_seat_interface.name) == 0) {
+        state->wl_seat = wl_registry_bind(wl_registry, name,
+                &wl_seat_interface, 1);
+        wl_seat_add_listener(state->wl_seat, &seat_listener, state);
     }
 }
 
@@ -284,6 +358,7 @@ main(int argc, char *argv[])
     zwlr_layer_surface_v1_set_anchor(state.layer_surface, anchors);
 
     zwlr_layer_surface_v1_set_exclusive_zone(state.layer_surface, -1);
+    zwlr_layer_surface_v1_set_keyboard_interactivity(state.layer_surface, 2);
 
     zwlr_layer_surface_v1_set_size(state.layer_surface, 0, 0);
     zwlr_layer_surface_v1_add_listener(state.layer_surface,

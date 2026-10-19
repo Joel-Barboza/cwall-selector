@@ -113,7 +113,14 @@ Ahora se intentará mostrar una imagen sobre el fondo verde.
 
 Pero primero, ahora sí, se continuará con el User story de cerrar la ventana.
 
+Anteriormente, se había leído que usando [`wl_seat`](https://wayland.app/protocols/wayland#wl_seat) se manejaba el input de teclado.
+Nuevamente, nos vamos a guiar con el ejemplo de Swaywm [^ref_code]. 
 
+--- 
+
+El [US-003: Cerrar la ventana](USER-STORIES.md/#us-003-cerrar-la-ventana-al-presionar-enter-o-hacer-clic) por el momento se va a marcar como completo
+teniendo únicamente la funcionalidad de cerrar la ventana al presionar enter, no al hacer clic.
+Pero para el MVP se piensa que es suficiente y con esto no es necesario agregar aún el listener a `wl_pointer` al `wl_seat`.
 
 
 # Referencias consultadas

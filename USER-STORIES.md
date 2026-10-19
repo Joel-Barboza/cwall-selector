@@ -42,7 +42,7 @@
 **Para** salir de la previsualización cuando ya no la necesite.
 
 #### Criterios de Aceptación:
-- [ ] Cierre interactivo:
+- [X] Cierre interactivo:
     - **Dado que** la ventana de previsualización está visible en pantalla,
     - **Cuando** hago clic sobre la imagen o presiono la tecla `Enter`,
     - **Entonces** la aplicación debe cerrarse de inmediato y liberar la pantalla.
