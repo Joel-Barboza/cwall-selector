@@ -46,6 +46,8 @@
     - **Dado que** la ventana de previsualización está visible en pantalla,
     - **Cuando** hago clic sobre la imagen o presiono la tecla `Enter`,
     - **Entonces** la aplicación debe cerrarse de inmediato y liberar la pantalla.
+> [!NOTE]
+> Se está leyendo solo el `Enter`, no el clic.
 
 ---
 
@@ -55,14 +57,16 @@
 **Para** no tener que especificar archivo por archivo manualmente.
 
 #### Criterios de Aceptación:
-- [ ] Carga inicial de directorio:
+- [X] Carga inicial de directorio:
     - **Dado que** existe una carpeta con varios archivos de imagen,
     - **Cuando** abro el selector apuntando a esa carpeta,
     - **Entonces** la aplicación debe cargar la primera imagen encontrada en la lista automáticamente.
-- [ ] Filtrado de archivos:
+- [X] Filtrado de archivos:
     - **Dado que** la carpeta contiene archivos mixtos,
     - **Cuando** el programa escanea el directorio,
     - **Entonces** debe ignorar los archivos que no sean imágenes sin fallar.
+> [!NOTE]
+> Se están usando solo .ppm por ahora
 
 ---
 

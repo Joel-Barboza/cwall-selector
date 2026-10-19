@@ -14,9 +14,10 @@
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
-
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <dirent.h>
 
 /* Shared memory support code */
 static void
@@ -84,10 +85,13 @@ struct client_state {
     bool running;
     /* Window */
     uint32_t width, height;
-
     /* Buffer */
     struct wl_buffer *buffer;
     uint32_t *data;
+    /* Images Dir */
+    DIR *dir;
+    char **image_uris;
+    int image_uris_count;
 
 };
 
@@ -132,10 +136,10 @@ create_wl_shm(struct client_state *state)
 static void
 draw_image(struct client_state *state)
 {
-    char *uri = "images/1344542.ppm";
+    // char *uri = "images/1344542.ppm";
     int scale = 8;
 
-    FILE *fptr = fopen(uri, "r");
+    FILE *fptr = fopen(state->image_uris[0], "r");
     if (!fptr) {
         printf("Error: No se pudo abrir el archivo PPM\n");
         return;
@@ -344,6 +348,41 @@ main(int argc, char *argv[])
 {
     struct client_state state = { 0 };
     state.running = true;
+    state.image_uris = NULL;
+    state.image_uris_count = 0;
+    state.dir = opendir("./images");
+    struct dirent *d;
+    if (state.dir) {
+        while ((d = readdir(state.dir)) != NULL) {
+            char *ext = strrchr(d->d_name, '.');
+            if (ext && strcmp(ext, ".ppm") == 0)
+            {
+                int nuevo_tamano = state.image_uris_count + 1;
+                char **temporal = realloc(state.image_uris, nuevo_tamano * sizeof(char *));
+
+                if (temporal == NULL) {
+                    perror("Error al realocar memoria para el arreglo");
+                    break;
+                }
+                state.image_uris = temporal;
+
+                size_t largo_total = strlen("./images/") + strlen(d->d_name) + 1;
+                state.image_uris[state.image_uris_count] = (char *)malloc(largo_total);
+
+                if (state.image_uris[state.image_uris_count] != NULL) {
+                    snprintf(state.image_uris[state.image_uris_count], largo_total, "./images/%s", d->d_name);
+
+                    state.image_uris_count++;
+                }
+            }
+        }
+        closedir(state.dir);
+    }
+    printf("Se encontraron %d imagenes:\n", state.image_uris_count);
+    for (int i = 0; i < state.image_uris_count; i++) {
+        printf("Imagen [%d]: %s\n", i, state.image_uris[i]);
+    }
+
     enum zwlr_layer_shell_v1_layer layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
     const char *namespace = "wallpaper-selector";
 
@@ -394,9 +433,17 @@ main(int argc, char *argv[])
     while (state.running && wl_display_dispatch(state.wl_display) != -1) {
         // printf("running\n");
         /* This space deliberately left blank */
-        int size = state.width * 4 * state.height;
+    }
+
+    int size = state.width * 4 * state.height;
+    if (state.data) {
         munmap(state.data, size);
     }
+
+    for (int i = 0; i < state.image_uris_count; i++) {
+        free(state.image_uris[i]);
+    }
+    free(state.image_uris);
 
     zwlr_layer_surface_v1_destroy(state.layer_surface);
     wl_surface_destroy(state.wl_surface);
