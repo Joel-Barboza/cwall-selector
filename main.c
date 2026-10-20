@@ -92,14 +92,18 @@ struct client_state {
     DIR *dir;
     char **image_uris;
     int image_uris_count;
+    int current_image;
 
 };
+
 
 static void
 wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
 {
     /* Sent by the compositor when it's no longer using this buffer */
-    wl_buffer_destroy(wl_buffer);
+    if (wl_buffer) {
+        wl_buffer_destroy(wl_buffer);
+    }
 }
 
 static const struct wl_buffer_listener wl_buffer_listener = {
@@ -134,15 +138,27 @@ create_wl_shm(struct client_state *state)
 }
 
 static void
+update_buffer(struct client_state *state)
+{
+    if (state->buffer) {
+        wl_buffer_destroy(state->buffer);
+        state->buffer = NULL;
+    }
+    create_wl_shm(state);
+}
+
+static void
 draw_image(struct client_state *state)
 {
     // char *uri = "images/1344542.ppm";
     int scale = 8;
 
-    FILE *fptr = fopen(state->image_uris[0], "r");
+    FILE *fptr = fopen(state->image_uris[state->current_image], "r");
     if (!fptr) {
-        printf("Error: No se pudo abrir el archivo PPM\n");
+        printf("Error: No se pudo abrir el archivo PPM: %s\n", state->image_uris[state->current_image]);
         return;
+    } else {
+        printf("Dibujando imagen exitosamente: %s\n", state->image_uris[state->current_image]);
     }
 
     char magic_number[4];
@@ -210,13 +226,25 @@ static void layer_surface_configure(void *data,
         uint32_t serial, uint32_t w, uint32_t h) {
     struct client_state *state = data;
     zwlr_layer_surface_v1_ack_configure(surface, serial);
+
+    if (state->buffer) {
+        wl_buffer_destroy(state->buffer);
+        state->buffer = NULL;
+    }
+    if (state->data) {
+        munmap(state->data, (size_t)state->width * 4 * state->height);
+        state->data = NULL;
+    }
+
     state->width = w;
     state->height = h;
 
     create_wl_shm(state);
     printf("Configurando capa a tamaño: %d x %d\n", w, h);
+
     draw_frame(state);
     draw_image(state);
+
     if (!state->buffer) {
         fprintf(stderr, "Error: No se pudo dibujar el frame en layer_surface\n");
         return;
@@ -224,6 +252,51 @@ static void layer_surface_configure(void *data,
     wl_surface_attach(state->wl_surface, state->buffer, 0, 0);
     wl_surface_damage_buffer(state->wl_surface, 0, 0, w, h);
     wl_surface_commit(state->wl_surface);
+}
+
+static void
+redraw_window(struct client_state *state)
+{
+    draw_frame(state);
+    draw_image(state);
+
+    int stride = state->width * 4;
+    int size = stride * state->height;
+
+    int fd = allocate_shm_file(size);
+    if (fd == -1) {
+        return;
+    }
+
+    uint32_t *new_data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (new_data == MAP_FAILED) {
+        close(fd);
+        return;
+    }
+
+    // Copiar los datos actuales renderizados al nuevo mmap
+    memcpy(new_data, state->data, size);
+
+    // Opcional: si quieres mantener state->data apuntando al mmap activo
+    munmap(state->data, size);
+    state->data = new_data;
+
+    struct wl_shm_pool *pool = wl_shm_create_pool(state->wl_shm, fd, size);
+    struct wl_buffer *new_buffer = wl_shm_pool_create_buffer(pool,
+        0, state->width, state->height, stride, WL_SHM_FORMAT_ARGB8888);
+
+    wl_buffer_add_listener(new_buffer, &wl_buffer_listener, NULL);
+    wl_shm_pool_destroy(pool);
+    close(fd);
+
+    wl_surface_attach(state->wl_surface, new_buffer, 0, 0);
+    wl_surface_damage_buffer(state->wl_surface, 0, 0, state->width, state->height);
+    wl_surface_commit(state->wl_surface);
+
+    // Actualizamos la referencia del buffer en el estado
+    state->buffer = new_buffer;
+
+    wl_display_flush(state->wl_display);
 }
 
 
@@ -258,12 +331,28 @@ static void wl_keyboard_leave(void *data, struct wl_keyboard *wl_keyboard,
 static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
         uint32_t serial, uint32_t time, uint32_t key, uint32_t state) {
     //wlr_log(WLR_DEBUG, "Key event: %d %d", key, state);
-    // printf("Key event: %d %d", key, state);
+    //printf("Key event: %d %d\n", key, state);
     struct client_state *client_state = data;
     // 28 is enter
-    if (key == 28)
+    if (key == 28 && state == 1)
     {
         client_state->running = false;
+    } else if (key == 105 && state == 1) {
+        printf("left\n");
+        client_state->current_image -= 1;
+        if (client_state->current_image < 0) {
+            client_state->current_image = client_state->image_uris_count - 1;
+        }
+
+        redraw_window(client_state);
+    } else if (key == 106 && state == 1) {
+        printf("right\n");
+        client_state->current_image += 1;
+        if (client_state->current_image >= client_state->image_uris_count) {
+            client_state->current_image = 0;
+        }
+
+        redraw_window(client_state);
     }
 }
 
@@ -366,6 +455,7 @@ main(int argc, char *argv[])
     state.running = true;
     state.image_uris = NULL;
     state.image_uris_count = 0;
+    state.current_image = 0;
     //state.dir = opendir("./images");
     struct dirent *d;
     if (state.dir) {
@@ -382,11 +472,11 @@ main(int argc, char *argv[])
                 }
                 state.image_uris = temporal;
 
-                size_t largo_total = strlen("./images/") + strlen(d->d_name) + 1;
+                size_t largo_total = strlen(argv[1]) + 1 + strlen(d->d_name) + 1;
                 state.image_uris[state.image_uris_count] = (char *)malloc(largo_total);
 
                 if (state.image_uris[state.image_uris_count] != NULL) {
-                    snprintf(state.image_uris[state.image_uris_count], largo_total, "./images/%s", d->d_name);
+                    snprintf(state.image_uris[state.image_uris_count], largo_total, "%s/%s", argv[1], d->d_name);
 
                     state.image_uris_count++;
                 }

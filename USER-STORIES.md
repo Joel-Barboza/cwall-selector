@@ -93,14 +93,18 @@
 **Para** explorar y comparar rápidamente los diferentes fondos disponibles.
 
 #### Criterios de Aceptación:
-- [ ] Navegación por desplazamiento:
+- [X] Navegación por desplazamiento:
     - **Dado que** la previsualización de una imagen está en pantalla,
     - **Cuando** hago *scroll* hacia abajo o hacia arriba con el ratón,
     - **Entonces** la pantalla debe actualizarse mostrando la siguiente o anterior imagen de la carpeta.
-- [ ] Comportamiento en los extremos:
+- [X] Comportamiento en los extremos:
     - **Dado que** alcanzo el final o el inicio de la lista de imágenes,
     - **Cuando** continúo haciendo scroll,
     - **Entonces** la navegación debe ser cíclica o detenerse de forma fluida.
+
+> [!NOTE]
+> Para el MVP se va a hacer con las teclas h y l, y fechas izquierda y derecha
+
 
 ---
 
