@@ -290,9 +290,9 @@ static void layer_surface_configure(void *data,
     int dest_w = state->preview_image_width;
     int dest_h = state->preview_image_height;
     const int x = (state->width - dest_w) / 2;
-    const int y = state->height - dest_h - 50;
+    const int y = (state->height - dest_h) * (2.0 / 3.0);
 
-    draw_image(state, x, y, dest_w, dest_h, 0.6);
+    draw_image(state, x, y, dest_w, dest_h, 1.0);
 
     commit_surface(state);
 }
@@ -308,7 +308,7 @@ static void redraw_window(struct client_state *state) {
     int dest_w = state->preview_image_width;
     int dest_h = state->preview_image_height;
     const int x = (state->width - dest_w) / 2;
-    const int y = state->height - dest_h - 50;
+    const int y = (state->height - dest_h) * (2.0 / 3.0);
 
     draw_image(state, x, y, dest_w, dest_h, 1.0);
 
@@ -350,8 +350,10 @@ static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
     //printf("Key event: %d %d\n", key, state);
     struct client_state *client_state = data;
     // 28 is enter
-    if (key == 28 && state == 1)
-    {
+    if (key == 28 && state == 1) {
+        char command[PATH_MAX + 100];
+        snprintf(command, sizeof(command), "~/.config/hypr/set_wallpaper.sh \"%s\" &", client_state->image_uris[client_state->current_image]);
+        system(command);
         client_state->running = false;
     } else if (key == 105 && state == 1) {
         printf("left\n");
