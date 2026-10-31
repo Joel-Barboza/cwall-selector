@@ -114,7 +114,7 @@
 **Para** apreciar cómo se integrará el fondo con mi entorno actual antes de aplicarlo.
 
 #### Criterios de Aceptación:
-- [ ] Efecto visual de opacidad:
+- [X] Efecto visual de opacidad:
     - **Dado que** el selector está superpuesto en la pantalla,
     - **Cuando** estoy observando la previsualización,
     - **Entonces** la imagen debe mostrar un nivel de transparencia/opacidad equilibrado que me permita ver el fondo y la distribución general del escritorio.

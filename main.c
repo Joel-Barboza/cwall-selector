@@ -93,6 +93,7 @@ struct client_state {
     char **image_uris;
     int image_uris_count;
     int current_image;
+    int preview_image_height, preview_image_width;
 
 };
 
@@ -101,9 +102,6 @@ static void
 wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
 {
     /* Sent by the compositor when it's no longer using this buffer */
-    if (wl_buffer) {
-        wl_buffer_destroy(wl_buffer);
-    }
 }
 
 static const struct wl_buffer_listener wl_buffer_listener = {
@@ -111,47 +109,8 @@ static const struct wl_buffer_listener wl_buffer_listener = {
 };
 
 static void
-create_wl_shm(struct client_state *state)
+draw_image(struct client_state *state, int x, int y, int dest_w, int dest_h, double dark_factor)
 {
-    int stride = state->width * 4;
-    int size = stride * state->height;
-
-    int fd = allocate_shm_file(size);
-    if (fd == -1) {
-        return;
-    }
-
-    state->data = mmap(NULL, size,
-            PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (state->data == MAP_FAILED) {
-        close(fd);
-        return;
-    }
-
-    struct wl_shm_pool *pool = wl_shm_create_pool(state->wl_shm, fd, size);
-    state->buffer = wl_shm_pool_create_buffer(pool,
-        0, state->width, state->height, stride, WL_SHM_FORMAT_ARGB8888);
-    wl_buffer_add_listener(state->buffer, &wl_buffer_listener, NULL);
-    wl_shm_pool_destroy(pool);
-    close(fd);
-    //return state->buffer;
-}
-
-static void
-update_buffer(struct client_state *state)
-{
-    if (state->buffer) {
-        wl_buffer_destroy(state->buffer);
-        state->buffer = NULL;
-    }
-    create_wl_shm(state);
-}
-
-static void
-draw_image(struct client_state *state)
-{
-    // char *uri = "images/1344542.ppm";
-    int scale = 8;
 
     FILE *fptr = fopen(state->image_uris[state->current_image], "r");
     if (!fptr) {
@@ -168,42 +127,88 @@ draw_image(struct client_state *state)
         fclose(fptr);
         return;
     }
-    fgetc(fptr); // consume newline after header
 
-    int offset_x = state->width / 2 - (w / scale) * 0.5;
-    int offset_y = state->height - w / scale - 10;
+    printf("Dims originales: %d x %d\n", w, h);
+
+    fgetc(fptr); // Consumir el salto de linea del encabezado
+
     typedef struct {
         unsigned char r, g, b;
     } pixel;
-    pixel currentPix;
 
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-            if (fread(&currentPix, 3, 1, fptr) != 1) {
-                break;
-            }
+    // Cargar todos los pixeles de la imagen original
+    pixel *pixels = malloc((size_t)w * h * sizeof(pixel));
 
-            if (y % scale == 0 && x % scale == 0) {
-                // Apply scale and add the starting offsets
-                int target_y = (y / scale) + offset_y;
-                int target_x = (x / scale) + offset_x;
+    if (pixels == NULL) {
+        perror("Error al reservar memoria para la imagen");
+        fclose(fptr);
+        return;
+    }
 
-                // Ensure we stay within screen boundaries
-                if (target_y >= 0 && target_y < state->height &&
-                    target_x >= 0 && target_x < state->width) {
+    if (fread(pixels, sizeof(pixel), (size_t)w * h, fptr)
+        != (size_t)w * h) {
+        printf("Error: no se pudieron leer todos los pixeles\n");
+        free(pixels);
+        fclose(fptr);
+        return;
+    }
 
-                    uint32_t rgb_color = 0xFF000000 |
-                                         ((uint32_t)currentPix.r << 16) |
-                                         ((uint32_t)currentPix.g << 8)  |
-                                         (uint32_t)currentPix.b;
+    fclose(fptr);
 
-                    state->data[target_y * state->width + target_x] = rgb_color;
-                    }
+    // Recortar la imagen original a una relacion 16:9
+    int crop_x = 0;
+    int crop_y = 0;
+    int crop_w = w;
+    int crop_h = h;
+
+    if ((double)w / h > (double) dest_w / (double) dest_h) {
+        crop_w = (int)(h * dest_w / dest_h);
+        crop_x = (w - crop_w) / 2;
+    } else {
+        crop_h = (int)(w * dest_h / dest_w);
+        crop_y = (h - crop_h) / 2;
+    }
+
+    // x e y iniciales
+    int offset_x = x;
+    int offset_y = y;
+
+    // Escalar mediante muestreo de pixeles
+    for (int y = 0; y < dest_h; y++) {
+        for (int x = 0; x < dest_w; x++) {
+
+            int source_x = crop_x + (int)((double)x * crop_w / dest_w);
+            int source_y = crop_y + (int)((double)y * crop_h / dest_h);
+
+            pixel currentPix = pixels[source_y * w + source_x];
+
+            // Aplicar el oscurecimiento a cada canal
+            unsigned char r = (unsigned char)(currentPix.r * dark_factor);
+            unsigned char g = (unsigned char)(currentPix.g * dark_factor);
+            unsigned char b = (unsigned char)(currentPix.b * dark_factor);
+
+            int target_x = offset_x + x;
+            int target_y = offset_y + y;
+
+            if (target_x >= 0 && target_x < state->width &&
+                target_y >= 0 && target_y < state->height) {
+
+                uint32_t rgb_color = 0xFF000000 |
+                    ((uint32_t)r << 16) |
+                    ((uint32_t)g << 8) |
+                    (uint32_t)b;
+
+                state->data[target_y * state->width + target_x]
+                    = rgb_color;
             }
         }
     }
 
-    fclose(fptr);
+    printf("Dimensiones dibujadas: %d x %d\n", dest_w, dest_h);
+    printf("Pixeles procesados: %d\n", dest_w * dest_h);
+
+    free(pixels);
+
 }
 
 
@@ -211,7 +216,6 @@ static void
 draw_frame(struct client_state *state)
 {
     int stride = state->width * 4;
-    int size = stride * state->height;
 
     uint32_t rgb_color = 0xAA000000;
     for (int y = 0; y < state->height; ++y) {
@@ -221,12 +225,7 @@ draw_frame(struct client_state *state)
     }
 }
 
-static void layer_surface_configure(void *data,
-        struct zwlr_layer_surface_v1 *surface,
-        uint32_t serial, uint32_t w, uint32_t h) {
-    struct client_state *state = data;
-    zwlr_layer_surface_v1_ack_configure(surface, serial);
-
+static int recreate_shm_buffer(struct client_state *state, uint32_t w, uint32_t h) {
     if (state->buffer) {
         wl_buffer_destroy(state->buffer);
         state->buffer = NULL;
@@ -239,64 +238,81 @@ static void layer_surface_configure(void *data,
     state->width = w;
     state->height = h;
 
-    create_wl_shm(state);
-    printf("Configurando capa a tamaño: %d x %d\n", w, h);
-
-    draw_frame(state);
-    draw_image(state);
-
-    if (!state->buffer) {
-        fprintf(stderr, "Error: No se pudo dibujar el frame en layer_surface\n");
-        return;
-    }
-    wl_surface_attach(state->wl_surface, state->buffer, 0, 0);
-    wl_surface_damage_buffer(state->wl_surface, 0, 0, w, h);
-    wl_surface_commit(state->wl_surface);
-}
-
-static void
-redraw_window(struct client_state *state)
-{
-    draw_frame(state);
-    draw_image(state);
-
     int stride = state->width * 4;
     int size = stride * state->height;
 
     int fd = allocate_shm_file(size);
-    if (fd == -1) {
-        return;
-    }
+    if (fd == -1) return -1;
 
-    uint32_t *new_data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (new_data == MAP_FAILED) {
+    state->data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (state->data == MAP_FAILED) {
+        state->data = NULL;
         close(fd);
-        return;
+        return -1;
     }
-
-    // Copiar los datos actuales renderizados al nuevo mmap
-    memcpy(new_data, state->data, size);
-
-    // Opcional: si quieres mantener state->data apuntando al mmap activo
-    munmap(state->data, size);
-    state->data = new_data;
 
     struct wl_shm_pool *pool = wl_shm_create_pool(state->wl_shm, fd, size);
-    struct wl_buffer *new_buffer = wl_shm_pool_create_buffer(pool,
-        0, state->width, state->height, stride, WL_SHM_FORMAT_ARGB8888);
+    state->buffer = wl_shm_pool_create_buffer(pool, 0, state->width, state->height, stride, WL_SHM_FORMAT_ARGB8888);
+    wl_buffer_add_listener(state->buffer, &wl_buffer_listener, NULL);
 
-    wl_buffer_add_listener(new_buffer, &wl_buffer_listener, NULL);
     wl_shm_pool_destroy(pool);
     close(fd);
+    return 0;
+}
 
-    wl_surface_attach(state->wl_surface, new_buffer, 0, 0);
+static void commit_surface(struct client_state *state) {
+    if (!state->buffer) {
+        fprintf(stderr, "Error: No hay buffer disponible para commit\n");
+        return;
+    }
+    wl_surface_attach(state->wl_surface, state->buffer, 0, 0);
     wl_surface_damage_buffer(state->wl_surface, 0, 0, state->width, state->height);
     wl_surface_commit(state->wl_surface);
-
-    // Actualizamos la referencia del buffer en el estado
-    state->buffer = new_buffer;
-
     wl_display_flush(state->wl_display);
+}
+
+static void layer_surface_configure(void *data,
+        struct zwlr_layer_surface_v1 *surface,
+        uint32_t serial, uint32_t w, uint32_t h) {
+    struct client_state *state = data;
+    zwlr_layer_surface_v1_ack_configure(surface, serial);
+
+    printf("Configurando capa a tamaño: %d x %d\n", w, h);
+
+    if (recreate_shm_buffer(state, w, h) == -1) {
+        return;
+    }
+
+    draw_frame(state);
+
+    draw_image(state, 0, 0, state->width, state->height, 0.1);
+
+    int dest_w = state->preview_image_width;
+    int dest_h = state->preview_image_height;
+    const int x = (state->width - dest_w) / 2;
+    const int y = state->height - dest_h - 50;
+
+    draw_image(state, x, y, dest_w, dest_h, 0.6);
+
+    commit_surface(state);
+}
+
+static void redraw_window(struct client_state *state) {
+    if (recreate_shm_buffer(state, state->width, state->height) == -1) {
+        return;
+    }
+    draw_frame(state);
+
+    draw_image(state, 0, 0, state->width, state->height, 0.1);
+
+    int dest_w = state->preview_image_width;
+    int dest_h = state->preview_image_height;
+    const int x = (state->width - dest_w) / 2;
+    const int y = state->height - dest_h - 50;
+
+    draw_image(state, x, y, dest_w, dest_h, 1.0);
+
+    commit_surface(state);
 }
 
 
@@ -456,6 +472,10 @@ main(int argc, char *argv[])
     state.image_uris = NULL;
     state.image_uris_count = 0;
     state.current_image = 0;
+    state.preview_image_height = 270;
+    state.preview_image_width = 480;
+    // state.preview_image_height = 670;
+    // state.preview_image_width = 480;
     //state.dir = opendir("./images");
     struct dirent *d;
     if (state.dir) {

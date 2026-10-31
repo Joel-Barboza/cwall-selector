@@ -144,6 +144,34 @@ Por:
 hl.bind(mainMod .. " + " .. "W", hl.dsp.exec_cmd("cd ~/Code/cwall-selector && ./main '" .. wallpaperDir .. "'"))
 ```
 
+---
+
+De momento pasar las imágenes rápidamente tiene un retraso, se intentará optimizar.
+
+---
+
+Se está teniendo problemas para hacer que todas las imágenes muestren el mismo tamaño. 
+Esto debido a que las imágenes no tienen la misma proporción de ancho y altura. Aunque la tienden a ser 16:9,
+algunas tienen unos cuantos píxeles de más en ancho o alto. Ejemplo:
+
+[Latex on git reference](https://github.blog/news-insights/product-news/math-support-in-markdown/)
+```math
+\frac{16}{9} = \frac{3520}{y} 
+```
+```math
+y = 1980 \lt 1984
+```
+Es decir, restando 4 píxeles ($1984 - 1980 = 4$) se obtiene la proporción 16:9
+```math
+\frac{16}{9} = \frac{x}{1984}
+``` 
+```math
+x \approx 3527 \not \lt 3520
+```
+Agregando $7.11$ píxeles se obtiene la proporción 16:9, el problema es que no podemos leer más píxeles de los que
+la imagen tiene. Es decir, no podemos agregar píxeles.
+
+Por lo que en este caso se dejarían por fuera 4 píxeles la altura para mantener la proporción 16:9.
 
 # Referencias consultadas
 
